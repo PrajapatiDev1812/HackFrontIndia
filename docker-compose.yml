@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.20-community
+    container_name: aura_neo4j_dev
+    ports:
+      - "7474:7474"   # Neo4j Browser UI → http://localhost:7474
+      - "7687:7687"   # Bolt protocol for Python driver
+    environment:
+      # Auth: username/password
+      - NEO4J_AUTH=neo4j/aura_dev_password
+      # APOC plugin — required for advanced graph procedures
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
+      # Memory tuning — safe defaults for 8GB RAM machine
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1G
+      - NEO4J_server_memory_pagecache_size=512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+    healthcheck:
+      # Poll the HTTP browser port — works without cypher-shell binary
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 40s   # Give Neo4j time to initialize on first run
+    restart: unless-stopped
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
