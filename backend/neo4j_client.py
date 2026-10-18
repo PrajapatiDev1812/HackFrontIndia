@@ -1,78 +1,42 @@
 import os
-from contextlib import contextmanager
+from dotenv import load_dotenv
 
 # Try to load .env for local development
 try:
-    # pyrefly: ignore[missing-import]
-    from dotenv import load_dotenv
     load_dotenv()
-except Exception:
+except:
     pass
 
-def get_neo4j_credentials():
-    """Get credentials from .env (local) or st.secrets (Streamlit Cloud).
+def get_neo4j_driver():
+    from neo4j import GraphDatabase
     
-    If running inside Streamlit, st.secrets is checked first.
-    If the placeholder value or missing in st.secrets, falls back to .env.
-    """
+    # 1. Try Streamlit Cloud Secrets first
     try:
-        # pyrefly: ignore[missing-import]
         import streamlit as st
-        if hasattr(st, 'secrets') and ('NEO4J_AURA_URI' in st.secrets or 'NEO4J_URI' in st.secrets):
-            pwd = st.secrets.get("NEO4J_AURA_PASSWORD") or st.secrets.get("NEO4J_PASSWORD")
-            # Only use st.secrets if it's not the placeholder
-            if pwd and pwd != "your_auradb_password_here":
-                uri = st.secrets.get("NEO4J_AURA_URI") or st.secrets.get("NEO4J_URI")
-                user = st.secrets.get("NEO4J_AURA_USERNAME") or st.secrets.get("NEO4J_USERNAME", "neo4j")
-                return {
-                    "uri": uri,
-                    "user": user,
-                    "password": pwd,
-                    "use_aura": True
-                }
+        if hasattr(st, 'secrets') and 'NEO4J_AURA_URI' in st.secrets:
+            uri = st.secrets["NEO4J_AURA_URI"]
+            user = st.secrets.get("NEO4J_AURA_USERNAME", "neo4j")
+            password = st.secrets["NEO4J_AURA_PASSWORD"]
+            return GraphDatabase.driver(uri, auth=(user, password))
     except Exception:
-        pass
+        pass # Not running in Streamlit or secrets missing
 
-    # Running locally with .env
+    # 2. Fallback to Local .env
     use_aura = os.getenv("USE_AURA_DB", "false").lower() == "true"
     
     if use_aura:
-        return {
-            "uri": os.getenv("NEO4J_AURA_URI"),
-            "user": os.getenv("NEO4J_AURA_USERNAME"),
-            "password": os.getenv("NEO4J_AURA_PASSWORD"),
-            "use_aura": True
-        }
+        uri = os.getenv("NEO4J_AURA_URI")
+        user = os.getenv("NEO4J_AURA_USERNAME")
+        password = os.getenv("NEO4J_AURA_PASSWORD")
     else:
-        return {
-            "uri": os.getenv("NEO4J_URI"),
-            "user": os.getenv("NEO4J_USERNAME"),
-            "password": os.getenv("NEO4J_PASSWORD"),
-            "use_aura": False
-        }
+        uri = os.getenv("NEO4J_URI")
+        user = os.getenv("NEO4J_USERNAME")
+        password = os.getenv("NEO4J_PASSWORD")
 
-def get_neo4j_driver():
-    # pyrefly: ignore[missing-import]
-    from neo4j import GraphDatabase
-    
-    creds = get_neo4j_credentials()
-    
-    if not all([creds.get("uri"), creds.get("user"), creds.get("password")]):
-        raise ValueError("Missing Neo4j credentials. Check .env file or st.secrets.toml")
-    
-    return GraphDatabase.driver(creds["uri"], auth=(creds["user"], creds["password"]))
+    if not all([uri, user, password]):
+        raise ValueError("Missing Neo4j credentials. Check .env file or Streamlit Secrets.")
 
-# Aliases and helper context manager for backward compatibility
-get_driver = get_neo4j_driver
-
-@contextmanager
-def get_session():
-    driver = get_neo4j_driver()
-    session = driver.session()
-    try:
-        yield session
-    finally:
-        session.close()
+    return GraphDatabase.driver(uri, auth=(user, password))
 
 if __name__ == "__main__":
     try:
