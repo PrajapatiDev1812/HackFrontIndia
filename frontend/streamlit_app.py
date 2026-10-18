@@ -4,21 +4,29 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # pyrefly: ignore[missing-import]
 import streamlit as st
-import requests
 import json
+import re
+
+# Direct Agent & Graph imports (No FastAPI HTTP dependency for Streamlit Cloud)
+try:
+    from backend.agent.agent import query_graph
+except ImportError:
+    from app.agent.agent import query_graph
+
 try:
     from frontend.graph_viz import generate_graph_html
 except ImportError:
-    from graph_viz import generate_graph_html
+    try:
+        from graph_viz import generate_graph_html
+    except ImportError:
+        from app.ui.graph_viz import generate_graph_html
 
 st.set_page_config(page_title="Aura GraphRAG", page_icon="🌟", layout="wide")
 
-API_BASE_URL = "http://localhost:8000"
-
 st.sidebar.title("⚙️ Aura Settings")
-st.sidebar.success("✅ Connected to Local FastAPI")
+st.sidebar.success("☁️ Running on Streamlit Cloud")
 st.sidebar.markdown("---")
-st.sidebar.info("Target: fastapi/fastapi\nLLM: Gemini 1.5 Flash\nDB: Neo4j AuraDB")
+st.sidebar.info("Target: fastapi/fastapi\nLLM: Gemini / Groq\nDB: Neo4j AuraDB")
 
 st.title("🌟 Aura: GitHub Architectural Decision Explorer")
 
@@ -41,40 +49,28 @@ with tab1:
         with st.chat_message("assistant"):
             with st.spinner("Querying the knowledge graph..."):
                 try:
-                    response = requests.post(f"{API_BASE_URL}/query", json={"question": prompt})
-                    result = response.json()
-                    
-                    if result.get("status") == "success":
-                        answer = result["answer"]
-                        st.markdown(answer)
-                        
-                        # Extract confidence score for gauge (simple regex fallback)
-                        import re
-                        conf_match = re.search(r'(\d{1,3})/100', answer)
-                        if conf_match:
-                            score = int(conf_match.group(1))
-                            st.markdown("**Confidence Gauge:**")
-                            st.progress(score / 100, text=f"{score}/100 — {'High' if score >= 80 else 'Medium' if score >= 50 else 'Low'} Confidence")
-                    else:
-                        st.error(result.get("answer", "Unknown error"))
-                except requests.exceptions.ConnectionError:
-                    st.error("❌ Cannot connect to FastAPI backend. Is `uvicorn backend.main:app` running?")
-        
-        st.session_state.messages.append({"role": "assistant", "content": answer if 'answer' in locals() else "Error"})
+                    result = query_graph(prompt)
+                    answer = result.get("answer", "No answer found")
+                    st.markdown(answer)
+
+                    # Extract confidence score for gauge (simple regex fallback)
+                    conf_match = re.search(r'(\d{1,3})/100', answer)
+                    if conf_match:
+                        score = int(conf_match.group(1))
+                        st.markdown("**Confidence Gauge:**")
+                        st.progress(score / 100, text=f"{score}/100 — {'High' if score >= 80 else 'Medium' if score >= 50 else 'Low'} Confidence")
+                except Exception as e:
+                    answer = f"Error querying graph: {str(e)}"
+                    st.error(answer)
+
+        st.session_state.messages.append({"role": "assistant", "content": answer})
 
 with tab2:
     st.subheader("Knowledge Graph Visualization")
-    st.info("Visualizing the latest extracted Decisions, PRs, and Files.")
-    
+    st.info("Visualizing the latest extracted Decisions, PRs, and Files directly from Neo4j AuraDB.")
+
     try:
-        # Fetch a sample query to get nodes for the graph
-        response = requests.post(f"{API_BASE_URL}/query", json={"question": "Show me recent architectural decisions"})
-        result = response.json()
-        
-        if result.get("status") == "success":
-            html_graph = generate_graph_html()
-            st.components.v1.html(html_graph, height=600, scrolling=True)
-        else:
-            st.warning("No graph data available yet. Run ingestion first.")
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Cannot connect to FastAPI backend.")
+        html_graph = generate_graph_html()
+        st.components.v1.html(html_graph, height=600, scrolling=True)
+    except Exception as e:
+        st.error(f"Error loading graph visualization: {str(e)}")
