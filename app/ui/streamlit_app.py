@@ -13,16 +13,20 @@ try:
     from backend.agent.agent import query_graph
 except ImportError:
     try:
+        # pyrefly: ignore[missing-import]
         from app.agent.agent import query_graph
     except ImportError:
+        # pyrefly: ignore[missing-import]
         from agent.agent import query_graph
 
 try:
     from frontend.graph_viz import generate_graph_html
 except ImportError:
     try:
+        # pyrefly: ignore[missing-import]
         from graph_viz import generate_graph_html
     except ImportError:
+        # pyrefly: ignore[missing-import]
         from app.ui.graph_viz import generate_graph_html
 
 st.set_page_config(page_title="Aura GraphRAG", page_icon="🌟", layout="wide")

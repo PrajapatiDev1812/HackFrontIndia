@@ -21,11 +21,23 @@ except ImportError:
 
 load_dotenv()
 
+def get_setting(key: str, default: str = "") -> str:
+    try:
+        # pyrefly: ignore[missing-import]
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.getenv(key, default)
+
 def get_llm():
-    provider = os.getenv("LLM_PROVIDER", "gemini")
+    provider = get_setting("LLM_PROVIDER", "groq")
     if provider == "gemini":
-        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", google_api_key=os.getenv("GOOGLE_API_KEY"), temperature=0)
-    return ChatGroq(model="qwen/qwen3.8-27b", groq_api_key=os.getenv("GROQ_API_KEY"), temperature=0)
+        google_api_key = get_setting("GOOGLE_API_KEY")
+        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", google_api_key=google_api_key, temperature=0)
+    groq_api_key = get_setting("GROQ_API_KEY")
+    return ChatGroq(model="qwen/qwen3.8-27b", groq_api_key=groq_api_key, temperature=0)
 
 SYSTEM_PROMPT = """You are Aura, an expert AI assistant for software architecture history.
 You ONLY answer based on the provided GraphRAG tools. NEVER hallucinate PR numbers, files, or decisions.
