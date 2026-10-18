@@ -42,7 +42,7 @@ def find_implicit_supersessions(pr_number: int) -> str:
         result = session.run("""
             MATCH (target_pr:PR {number: $pr_number})-[:MODIFIES]->(f:File)<-[:MODIFIES]-(newer_pr:PR)
             WHERE target_pr.id <> newer_pr.id 
-              AND (newer_pr.merged_at > target_pr.created_at OR newer_pr.state = 'open')
+              AND (newer_pr.merged_at > target_pr.merged_at OR newer_pr.state = 'open')
             RETURN newer_pr.number AS newer_pr_number, newer_pr.title AS newer_pr_title, 
                    count(f) AS overlap_count
             ORDER BY overlap_count DESC LIMIT 5

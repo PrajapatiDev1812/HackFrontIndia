@@ -24,8 +24,8 @@ load_dotenv()
 def get_llm():
     provider = os.getenv("LLM_PROVIDER", "gemini")
     if provider == "gemini":
-        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"), temperature=0)
-    return ChatGroq(model="llama-3.1-8b-instant", groq_api_key=os.getenv("GROQ_API_KEY"), temperature=0)
+        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", google_api_key=os.getenv("GOOGLE_API_KEY"), temperature=0)
+    return ChatGroq(model="qwen/qwen3.8-27b", groq_api_key=os.getenv("GROQ_API_KEY"), temperature=0)
 
 SYSTEM_PROMPT = """You are Aura, an expert AI assistant for software architecture history.
 You ONLY answer based on the provided GraphRAG tools. NEVER hallucinate PR numbers, files, or decisions.
