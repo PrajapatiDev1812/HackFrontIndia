@@ -1,6 +1,7 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add workspace root so 'backend' package is importable
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # pyrefly: ignore[missing-import]
 import streamlit as st
@@ -11,6 +12,7 @@ import re
 try:
     from backend.agent.agent import query_graph
 except ImportError:
+    # pyrefly: ignore[missing-import]
     from app.agent.agent import query_graph
 
 try:
@@ -19,6 +21,7 @@ except ImportError:
     try:
         from graph_viz import generate_graph_html
     except ImportError:
+        # pyrefly: ignore[missing-import]
         from app.ui.graph_viz import generate_graph_html
 
 st.set_page_config(page_title="Aura GraphRAG", page_icon="🌟", layout="wide")
