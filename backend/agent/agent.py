@@ -22,21 +22,51 @@ except ImportError:
 load_dotenv()
 
 def get_setting(key: str, default: str = "") -> str:
+    def _clean(v):
+        if v is None:
+            return ""
+        s = str(v).strip()
+        if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+            s = s[1:-1].strip()
+        return s
+
+    # 1. Try Streamlit Cloud Secrets
     try:
         # pyrefly: ignore[missing-import]
         import streamlit as st
-        if hasattr(st, "secrets") and key in st.secrets:
-            return str(st.secrets[key])
+        if hasattr(st, "secrets"):
+            for k in [key, key.upper(), key.lower()]:
+                if k in st.secrets:
+                    val = _clean(st.secrets[k])
+                    if val and not val.startswith("your_"):
+                        return val
     except Exception:
         pass
-    return os.getenv(key, default)
+
+    # 2. Try environment variables
+    for k in [key, key.upper(), key.lower()]:
+        val = _clean(os.getenv(k, ""))
+        if val and not val.startswith("your_"):
+            return val
+
+    return default
 
 def get_llm():
     provider = get_setting("LLM_PROVIDER", "groq")
     if provider == "gemini":
         google_api_key = get_setting("GOOGLE_API_KEY")
+        if not google_api_key or google_api_key.startswith("your_"):
+            raise ValueError(
+                "GOOGLE_API_KEY is missing or invalid. If running on Streamlit Cloud, "
+                "please paste your valid GOOGLE_API_KEY into Streamlit Cloud Settings -> Secrets."
+            )
         return ChatGoogleGenerativeAI(model="gemini-3.8-flash", google_api_key=google_api_key, temperature=0)
     groq_api_key = get_setting("GROQ_API_KEY")
+    if not groq_api_key or groq_api_key.startswith("your_"):
+        raise ValueError(
+            "GROQ_API_KEY is missing or invalid. If running on Streamlit Cloud, "
+            "please paste your valid GROQ_API_KEY into Streamlit Cloud Settings -> Secrets."
+        )
     return ChatGroq(model="qwen/qwen3.8-27b", groq_api_key=groq_api_key, temperature=0)
 
 SYSTEM_PROMPT = """You are Aura, an expert AI assistant for software architecture history.
@@ -70,20 +100,36 @@ def create_aura_agent():
     else:
         return create_agent(llm, tools=tools, system_prompt=SYSTEM_PROMPT)
 
-# Global agent instance
-aura_agent = create_aura_agent()
+_aura_agent = None
+
+def get_aura_agent(force_reload: bool = False):
+    global _aura_agent
+    if _aura_agent is None or force_reload:
+        _aura_agent = create_aura_agent()
+    return _aura_agent
 
 def query_graph(user_question: str) -> dict:
     try:
+        agent = get_aura_agent()
         if HAS_LEGACY_AGENT:
-            response = aura_agent.invoke({"input": user_question})
+            response = agent.invoke({"input": user_question})
             return {"status": "success", "answer": response["output"]}
         else:
-            response = aura_agent.invoke({"messages": [{"role": "user", "content": user_question}]})
+            response = agent.invoke({"messages": [{"role": "user", "content": user_question}]})
             messages = response.get("messages", [])
             last_content = messages[-1].content if messages else "No response generated."
             if isinstance(last_content, list):
                 last_content = "".join([c.get("text", "") if isinstance(c, dict) else str(c) for c in last_content])
             return {"status": "success", "answer": str(last_content)}
     except Exception as e:
-        return {"status": "error", "answer": f"Agent execution failed: {str(e)}"}
+        err_msg = str(e)
+        if "API_KEY_INVALID" in err_msg or "400 INVALID_ARGUMENT" in err_msg:
+            # Try reloading agent once with clean fallback
+            try:
+                agent = get_aura_agent(force_reload=True)
+                if HAS_LEGACY_AGENT:
+                    response = agent.invoke({"input": user_question})
+                    return {"status": "success", "answer": response["output"]}
+            except Exception:
+                pass
+        return {"status": "error", "answer": f"Agent execution failed: {err_msg}"}
